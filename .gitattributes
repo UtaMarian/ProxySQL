@@ -1,0 +1,5 @@
+# Keep LF everywhere: these files are used on Linux servers and inside Linux containers,
+# even when the repository is cloned on Windows.
+* text=auto eol=lf
+*.ps1 text eol=crlf
+*.png binary

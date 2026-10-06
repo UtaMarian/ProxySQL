@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ProxySQL Web UI</title>
+<link rel="icon" href="/static/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body>
+<div id="login" class="login hidden">
+  <form id="login-form" class="login-card" autocomplete="on">
+    <div class="brand-lg"><span class="logo"></span>ProxySQL Web UI</div>
+    <label>Username<input name="username" autocomplete="username" required autofocus></label>
+    <label>Password<input name="password" type="password" autocomplete="current-password" required></label>
+    <div id="login-error" class="form-error" role="alert"></div>
+    <button class="btn primary" type="submit">Sign in</button>
+  </form>
+</div>
+
+<div id="app" class="app hidden">
+  <aside class="sidebar" id="sidebar">
+    <div class="brand"><span class="logo"></span>ProxySQL</div>
+    <nav id="nav"></nav>
+    <div class="sidebar-foot" id="app-version"></div>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <button class="icon-btn menu-toggle" id="menu-toggle" aria-label="Toggle menu">&#9776;</button>
+      <select id="instance-select" aria-label="ProxySQL instance"></select>
+      <span id="instance-status" class="pill"></span>
+      <a id="pending-badge" class="pill warn hidden" href="#/sync" title="Memory differs from runtime or disk"></a>
+      <span class="spacer"></span>
+      <button class="icon-btn" id="theme-toggle" title="Toggle theme" aria-label="Toggle theme">&#9680;</button>
+      <div class="user-menu">
+        <a href="#/account" id="user-name"></a>
+        <button class="btn small" id="logout-btn">Sign out</button>
+      </div>
+    </header>
+    <main id="view" class="view"></main>
+  </div>
+</div>
+
+<div id="modal-root"></div>
+<div id="toasts" class="toasts" aria-live="polite"></div>
+<script src="/static/js/app.js"></script>
+</body>
+</html>

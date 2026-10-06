@@ -1,0 +1,67 @@
+# ProxySQL bootstrap config for the Docker test stack (used by both proxysql1 and proxysql2).
+# Only read on first start (when /var/lib/proxysql/proxysql.db does not exist yet);
+# afterwards the configuration lives in ProxySQL's database and is managed from the web UI.
+datadir="/var/lib/proxysql"
+
+admin_variables=
+{
+    # admin = localhost only, radmin = web UI, cluster = ProxySQL Cluster peer sync
+    admin_credentials="admin:admin;radmin:radmin;cluster:clusterpass"
+    mysql_ifaces="0.0.0.0:6032"
+
+    cluster_username="cluster"
+    cluster_password="clusterpass"
+    cluster_check_interval_ms=200
+    cluster_check_status_frequency=100
+    cluster_mysql_query_rules_save_to_disk=true
+    cluster_mysql_servers_save_to_disk=true
+    cluster_mysql_users_save_to_disk=true
+    cluster_proxysql_servers_save_to_disk=true
+    cluster_mysql_variables_save_to_disk=true
+    cluster_admin_variables_save_to_disk=true
+}
+
+mysql_variables=
+{
+    threads=2
+    interfaces="0.0.0.0:6033"
+    server_version="11.4.0-MariaDB"
+    monitor_username="monitor"
+    monitor_password="monitor"
+    monitor_ping_interval=5000
+    monitor_connect_interval=10000
+    monitor_read_only_interval=1500
+    monitor_replication_lag_interval=5000
+}
+
+# ProxySQL Cluster members
+proxysql_servers=
+(
+    { hostname="proxysql1", port=6032, weight=0, comment="node 1" },
+    { hostname="proxysql2", port=6032, weight=0, comment="node 2" }
+)
+
+# Async replication: the monitor puts read_only=0 servers in HG 10 (writer), read_only=1 in HG 20 (reader)
+mysql_replication_hostgroups=
+(
+    { writer_hostgroup=10, reader_hostgroup=20, check_type="read_only", comment="mariadb replication" }
+)
+
+mysql_servers=
+(
+    { address="mariadb1", port=3306, hostgroup=10, weight=100, max_connections=200, max_replication_lag=10, comment="primary" },
+    { address="mariadb2", port=3306, hostgroup=20, weight=100, max_connections=200, max_replication_lag=10, comment="replica 1" },
+    { address="mariadb3", port=3306, hostgroup=20, weight=100, max_connections=200, max_replication_lag=10, comment="replica 2" }
+)
+
+mysql_users=
+(
+    { username="app", password="apppass", default_hostgroup=10, default_schema="appdb", active=1 }
+)
+
+# read/write split: SELECT ... FOR UPDATE -> writer, other SELECTs -> readers, everything else -> default (writer)
+mysql_query_rules=
+(
+    { rule_id=100, active=1, match_digest="^SELECT.*FOR UPDATE", destination_hostgroup=10, apply=1, comment="locking reads to writer" },
+    { rule_id=200, active=1, match_digest="^SELECT", destination_hostgroup=20, apply=1, comment="reads to readers" }
+)

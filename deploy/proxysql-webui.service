@@ -1,0 +1,33 @@
+[Unit]
+Description=ProxySQL Web UI
+Documentation=file:///opt/proxysql-webui/README.md
+After=network-online.target proxysql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=proxysql-webui
+Group=proxysql-webui
+WorkingDirectory=/opt/proxysql-webui
+Environment=PROXYSQL_WEBUI_CONFIG=/etc/proxysql-webui/config.ini
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/proxysql-webui/venv/bin/gunicorn -c /etc/proxysql-webui/gunicorn.conf.py wsgi:application
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5
+UMask=0027
+
+# Hardening. NoNewPrivileges must stay disabled: service control relies on sudo.
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/var/lib/proxysql-webui
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+LockPersonality=true
+# Uncomment to bind a port below 1024 (e.g. 443) directly:
+#AmbientCapabilities=CAP_NET_BIND_SERVICE
+
+[Install]
+WantedBy=multi-user.target

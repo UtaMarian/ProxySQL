@@ -1,0 +1,7 @@
+# Python >= 3.9 (RHEL 9: python3.9 / 3.11 / 3.12, RHEL 10: python3.12, Windows: python.org 3.9+)
+Flask>=2.3,<4
+PyMySQL>=1.1,<2
+# Linux server (systemd service)
+gunicorn>=21.2,<24; sys_platform != "win32"
+# Windows server (gunicorn does not run on Windows)
+waitress>=3.0,<4; sys_platform == "win32"

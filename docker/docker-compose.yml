@@ -1,0 +1,124 @@
+# Local test stack:
+#   3 x MariaDB 11  (mariadb1 = primary, mariadb2/3 = GTID replicas with read_only=1)
+#   2 x ProxySQL    (ProxySQL Cluster: proxysql1 <-> proxysql2 sync users/servers/rules/variables)
+#   ProxySQL Web UI (manages both nodes) + a small traffic generator
+#
+#   cd docker && docker compose up -d --build
+#   Web UI:     http://localhost:18080        admin / AdminPass123
+#   proxysql1:  127.0.0.1:16033 (clients)  127.0.0.1:16032 (admin radmin/radmin)
+#   proxysql2:  127.0.0.1:26033 (clients)  127.0.0.1:26032 (admin radmin/radmin)
+#   MariaDB:    127.0.0.1:13306 / 13307 / 13308   root / rootpass
+#   Stop & reset everything:  docker compose down -v
+name: proxysql-webui-test
+
+x-mariadb: &mariadb
+  image: mariadb:11
+  healthcheck:
+    test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+    interval: 5s
+    timeout: 5s
+    retries: 30
+
+x-proxysql: &proxysql
+  image: proxysql/proxysql:latest
+  depends_on:
+    mariadb1: { condition: service_healthy }
+    mariadb2: { condition: service_healthy }
+    mariadb3: { condition: service_healthy }
+
+services:
+  mariadb1:
+    <<: *mariadb
+    command: ["--server-id=1", "--log-bin=mariadb-bin", "--log-basename=mariadb1", "--binlog-format=ROW"]
+    environment:
+      MARIADB_ROOT_PASSWORD: rootpass
+      MARIADB_REPLICATION_USER: repl
+      MARIADB_REPLICATION_PASSWORD: replpass
+    volumes:
+      - ./mariadb-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - mariadb1-data:/var/lib/mysql
+    ports: ["127.0.0.1:13306:3306"]
+
+  mariadb2:
+    <<: *mariadb
+    command: ["--server-id=2", "--log-bin=mariadb-bin", "--log-basename=mariadb2", "--binlog-format=ROW", "--read-only=1"]
+    depends_on:
+      mariadb1: { condition: service_healthy }
+    environment:
+      MARIADB_ROOT_PASSWORD: rootpass
+      MARIADB_REPLICATION_USER: repl
+      MARIADB_REPLICATION_PASSWORD: replpass
+      MARIADB_MASTER_HOST: mariadb1
+    volumes:
+      - ./mariadb-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - mariadb2-data:/var/lib/mysql
+    ports: ["127.0.0.1:13307:3306"]
+
+  mariadb3:
+    <<: *mariadb
+    command: ["--server-id=3", "--log-bin=mariadb-bin", "--log-basename=mariadb3", "--binlog-format=ROW", "--read-only=1"]
+    depends_on:
+      mariadb1: { condition: service_healthy }
+    environment:
+      MARIADB_ROOT_PASSWORD: rootpass
+      MARIADB_REPLICATION_USER: repl
+      MARIADB_REPLICATION_PASSWORD: replpass
+      MARIADB_MASTER_HOST: mariadb1
+    volumes:
+      - ./mariadb-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - mariadb3-data:/var/lib/mysql
+    ports: ["127.0.0.1:13308:3306"]
+
+  proxysql1:
+    <<: *proxysql
+    hostname: proxysql1
+    volumes:
+      - ./proxysql.cnf:/etc/proxysql.cnf:ro
+      - proxysql1-data:/var/lib/proxysql
+    ports: ["127.0.0.1:16032:6032", "127.0.0.1:16033:6033"]
+
+  proxysql2:
+    <<: *proxysql
+    hostname: proxysql2
+    volumes:
+      - ./proxysql.cnf:/etc/proxysql.cnf:ro
+      - proxysql2-data:/var/lib/proxysql
+    ports: ["127.0.0.1:26032:6032", "127.0.0.1:26033:6033"]
+
+  webui:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    depends_on: [proxysql1, proxysql2]
+    environment:
+      WEBUI_ADMIN_PASSWORD: AdminPass123
+    volumes:
+      - webui-data:/var/lib/proxysql-webui
+    ports: ["127.0.0.1:18080:8080"]
+
+  # Sends a few queries per second through both ProxySQL nodes so dashboards have data.
+  traffic:
+    image: mariadb:11
+    depends_on: [proxysql1, proxysql2]
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        while true; do
+          for p in proxysql1 proxysql2; do
+            mariadb --skip-ssl -h $$p -P 6033 -uapp -papppass appdb -e "
+              SELECT COUNT(*) FROM orders;
+              SELECT * FROM orders ORDER BY id DESC LIMIT 5;
+              SELECT id FROM orders WHERE id = 1 FOR UPDATE;
+              INSERT INTO orders (customer, amount) VALUES (CONCAT('cust', FLOOR(RAND()*100)), RAND()*500);
+            " >/dev/null 2>&1 || echo "traffic: $$p not ready / write failed"
+          done
+          sleep 0.$$((RANDOM % 9 + 1))
+        done
+
+volumes:
+  mariadb1-data:
+  mariadb2-data:
+  mariadb3-data:
+  proxysql1-data:
+  proxysql2-data:
+  webui-data:

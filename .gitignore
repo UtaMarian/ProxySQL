@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+data/
+*.db
+*.db-wal
+*.db-shm
+dev.ini
+wheels/
+*.log
+.vscode/
+.idea/
